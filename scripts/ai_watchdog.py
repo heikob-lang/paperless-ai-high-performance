@@ -408,11 +408,22 @@ def recover_staged_files():
             uid = staged_file.stem
             
             # 1. Prüfen ob dieses Dokument vielleicht schon VOR dem letzten Crash erfolgreich in Paperless ankam!
+            # Berechne die MD5 der physischen Datei (uid = Dateiname, sollte der MD5 entsprechen)
+            actual_md5 = calculate_md5(staged_file)
+            
             if client:
-                duplicate = client.get_document_by_checksum(uid)
-                if duplicate:
-                    logger.info(f"👻 Ghost File erkannt: {staged_file.name} existiert bereits in Paperless! Lösche Dateileiche...")
-                    staged_file.unlink()
+                # Doppelte Absicherung: Prüfe sowohl mit Dateiname-UID als auch mit der echten berechneten MD5
+                for checksum_candidate in set([uid, actual_md5]):
+                    duplicate = client.get_document_by_checksum(checksum_candidate)
+                    if duplicate:
+                        logger.info(f"👻 Ghost File erkannt: {staged_file.name} existiert bereits als '{duplicate.get('title')}' (ID {duplicate.get('id')}) in Paperless! Lösche Dateileiche...")
+                        staged_file.unlink()
+                        break
+                else:
+                    # Kein Duplikat gefunden → weiter mit Recovery
+                    pass
+                
+                if not staged_file.exists():
                     continue
             
             logger.info(f"🔄 Recovering: {staged_file.name}")
