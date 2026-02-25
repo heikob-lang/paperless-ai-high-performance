@@ -224,23 +224,46 @@ def process_file_single(input_file: Path):
 
     except Exception as e:
         logger.error(f"Fehler bei CPU-Analyse von {input_file.name}: {e}")
-        logger.warning("⚠️ Überspringe Datei und übergebe direkt an Paperless (Fail-Safe).")
         
-        # Fallback: Verschiebe Datei trotzdem nach consume, damit Paperless es versuchen kann
+        # Fail-Safe: Aber NICHT blind nach consume verschieben!
+        # Erst prüfen, ob es ein Duplikat ist – sonst erzeugen wir ConsumerErrors.
         try:
             if input_file.exists():
-                target_consume = CONSUME_DIR / input_file.name
-                shutil.move(str(input_file), str(target_consume))
-                os.chmod(target_consume, 0o666)
-                logger.info(f"✅ (Fail-Safe) Original nach consume verschoben: {input_file.name}")
-            return True # Success verhindern Verschieben nach 'error'
+                # Duplikat-Check vor dem Verschieben
+                file_md5 = calculate_md5(input_file)
+                is_known_dup = False
+                
+                try:
+                    config = load_config()
+                    if config:
+                        from modules.paperless_client import PaperlessClient
+                        client = PaperlessClient(config)
+                        dup = client.get_document_by_checksum(file_md5)
+                        if dup:
+                            is_known_dup = True
+                            logger.info(f"⚠️ (Fail-Safe) Bekanntes Duplikat von '{dup.get('title')}' (#{dup.get('id')}). Verschiebe in duplicates-Ordner.")
+                except Exception:
+                    pass  # API nicht erreichbar → sicherheitshalber nach consume lassen
+                
+                if is_known_dup:
+                    dup_dir = Path("/usr/src/paperless/scan_input/duplicates")
+                    dup_dir.mkdir(exist_ok=True)
+                    target = dup_dir / input_file.name
+                    if target.exists():
+                        target = dup_dir / f"{input_file.stem}_{int(time.time())}{input_file.suffix}"
+                    shutil.move(str(input_file), str(target))
+                    logger.info(f"✅ (Fail-Safe) Duplikat nach duplicates verschoben: {target.name}")
+                else:
+                    # Kein bekanntes Duplikat → nach consume (Paperless versucht es)
+                    logger.warning("⚠️ Überspringe KI-Analyse und übergebe direkt an Paperless (Fail-Safe).")
+                    target_consume = CONSUME_DIR / input_file.name
+                    shutil.move(str(input_file), str(target_consume))
+                    os.chmod(target_consume, 0o666)
+                    logger.info(f"✅ (Fail-Safe) Original nach consume verschoben: {input_file.name}")
+            return True
         except Exception as move_e:
             logger.error(f"Kritischer Fehler beim Verschieben (Fail-Safe): {move_e}")
             return False
-            
-        # Cleanup bei CPU-Fehler
-        if work_dir.exists():
-            shutil.rmtree(work_dir, ignore_errors=True)
 
 def gpu_worker():
     """Hintergrund-Thread: Holt Bilder aus der Warteschlange und sendet sie nacheinander an Ollama (GPU)"""
