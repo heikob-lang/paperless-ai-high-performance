@@ -1,4 +1,5 @@
 import requests
+from pathlib import Path
 from typing import Dict, Any, Optional
 
 class PaperlessClient:
@@ -6,6 +7,9 @@ class PaperlessClient:
         self.api_url = config['paperless']['url'].rstrip('/')
         self.token = config['paperless']['token']
         self.headers = {"Authorization": f"Token {self.token}"}
+        # Session mit persistentem Auth-Header für alle Requests
+        self.session = requests.Session()
+        self.session.headers.update(self.headers)
         # Public URL for user-facing links (fallback to internal URL if not set)
         self.public_url = config['paperless'].get('public_url', self.api_url).rstrip('/')
 
