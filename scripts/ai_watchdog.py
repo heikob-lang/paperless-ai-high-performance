@@ -139,11 +139,13 @@ def process_file_single(input_file: Path):
         logger.error(f"Error checking binary duplicates: {e}")
 
         # 0b. Quick pre‑vision duplicate check using extracted PDF text (if any)
+        # Bei Vektor‑Ähnlichkeit: Dokument wird NICHT blockiert, sondern importiert.
+        # Eine Notiz mit Vergleichs‑Link wird angehängt → User entscheidet selbst.
+        duplicate_info = {}
         try:
             from pdfminer.high_level import extract_text
             raw_text = extract_text(str(input_file))
             if raw_text and raw_text.strip():
-                # Use LLMClient to embed the extracted text (requires embed_text method)
                 try:
                     embedding = llm_client.generate_embedding(raw_text)
                 except Exception as embed_err:
@@ -153,14 +155,16 @@ def process_file_single(input_file: Path):
                     try:
                         from modules.chroma_client import ChromaClient
                         chroma = ChromaClient()
-                        similar = chroma.query(embedding, top_k=1, threshold=0.95)
+                        similar = chroma.find_similar(raw_text, threshold=0.95, n_results=1)
                         if similar:
-                            logger.info(f"⚠️ Vorzeitiges Duplikat (Text‑Embedding) erkannt für {input_file.name}")
-                            dup_dir = WATCH_DIR / "duplicates"
-                            dup_dir.mkdir(exist_ok=True)
-                            target = dup_dir / input_file.name
-                            shutil.move(str(input_file), str(target))
-                            return True
+                            orig_id = similar[0].get("id")
+                            sim_score = similar[0].get("similarity", 0.95)
+                            logger.info(f"⚠️ Vektor‑Ähnlichkeit ({sim_score:.0%}) mit Dok #{orig_id} erkannt für {input_file.name}. Importiere trotzdem – User entscheidet.")
+                            duplicate_info = {
+                                "is_duplicate": True,
+                                "original_id": orig_id,
+                                "similarity": round(sim_score, 4)
+                            }
                     except Exception as chroma_err:
                         logger.error(f"Chroma‑Abfrage‑Fehler im Vor‑Duplicate‑Check: {chroma_err}")
         except Exception as e:
@@ -210,7 +214,8 @@ def process_file_single(input_file: Path):
             "original_filename": input_file.name,
             "staged_file": staged_file,
             "work_dir": work_dir,
-            "b64_images": optimized_images_b64
+            "b64_images": optimized_images_b64,
+            "duplicate_info": duplicate_info
         }
         ocr_queue.put(queue_item)
         
@@ -311,7 +316,7 @@ def gpu_worker():
                 sidecar_json = MD_BUFFER_DIR / (f"{uid}.json")
                 sidecar_data = {
                     "metadata": {},
-                    "duplicate_info": {},
+                    "duplicate_info": item.get("duplicate_info", {}),
                     "ai_content": full_ai_text,
                     "scan_date": time.time(),
                     "original_filename": original_filename,
