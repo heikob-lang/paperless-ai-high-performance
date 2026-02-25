@@ -1,0 +1,39 @@
+# Paperless-AI GitHub Ignore
+# Exclude sensitive data and large media volumes
+
+# Database and Paperless Data
+data/
+pgdata/
+chromadb_data/
+media/
+consume/
+scan_input/
+export/
+staging/
+temp/
+
+# Configuration & Secrets
+# User should copy these from examples
+ai_config.yaml
+.env
+docker-compose.env
+.webui_secret_key
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.pytest_cache/
+
+# System & IDES
+.vscode/
+.idea/
+.DS_Store
+
+# Temporary & Backups
+*.log
+*.tar.gz
+Juergen.txt
+ai_buffer/
+ai_staging/

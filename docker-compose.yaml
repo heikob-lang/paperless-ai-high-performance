@@ -1,0 +1,170 @@
+services:
+  broker:
+    image: docker.io/library/redis:latest
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+
+  db:
+    image: docker.io/library/postgres:17.4
+    restart: unless-stopped
+    volumes:
+      - /volume1/docker/paperless-ngx/pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: paperless
+      POSTGRES_USER: paperless
+      POSTGRES_PASSWORD: paperless
+
+  webserver:
+    #    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    build: ./docker-build
+    container_name: paperless-webserver
+    restart: unless-stopped
+    depends_on:
+      - db
+      - broker
+      - gotenberg
+      - tika
+    ports:
+      - 8000:8000
+    healthcheck:
+      test: [ "CMD", "curl", "-fs", "-S", "--max-time", "2", "http://localhost:8000" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - /volume1/temp:/volume1/temp
+      - /volume1/docker/paperless-ngx/data:/usr/src/paperless/data
+      - /volume1/docker/paperless-ngx/media:/usr/src/paperless/media
+      - /volume1/docker/paperless-ngx/export:/usr/src/paperless/export
+      - /volume1/docker/paperless-ngx/consume:/usr/src/paperless/consume
+      - /volume1/docker/paperless-ngx/scripts:/usr/src/paperless/scripts
+      - /volume1/docker/paperless-ngx/media/compare.html:/usr/src/paperless/static/compare.html:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    #env_file: docker-compose.env
+    environment:
+      PAPERLESS_ADMIN_USER: Admin
+      PAPERLESS_ADMIN_PASSWORD: Masterkey1
+      PYTHONIOENCODING: "utf-8"
+      PAPERLESS_REDIS: redis://broker:6379
+      PAPERLESS_DBHOST: db
+      PAPERLESS_TIKA_ENABLED: 1
+      PAPERLESS_TIKA_GOTENBERG_ENDPOINT: http://gotenberg:3000
+      PAPERLESS_TIKA_ENDPOINT: http://tika:9998
+      PAPERLESS_CONSUMER_ENABLE_BARCODES: false
+      PAPERLESS_OCR_MODE: skip
+      PAPERLESS_CONSUMER_INOTIFY_DELAY: 5
+      PAPERLESS_CONSUMER_Poll: 10
+      PAPERLESS_OCR_USER_ARGS: '{"invalidate_digital_signatures": true,"continue_on_soft_render_error": true}'
+      PAPERLESS_CONSUMER_POLLING_RETRY_COUNT: 5
+      PAPERLESS_CONSUMER_POLLING_DELAY: 30
+      PAPERLESS_CONSUMER_DELETE_DUPLICATES: "false"
+      PAPERLESS_CELERY_TASK_TIME_LIMIT: 3600
+      PAPERLESS_CELERY_TASK_SOFT_TIME_LIMIT: 3000
+      PAPERLESS_TRASH_DIR: /usr/src/paperless/media/trash
+      PAPERLESS_ENABLE_WORKFLOW_EXECUTION: "true"
+      # PAPERLESS_PRE_CONSUME_SCRIPT: /volume1/temp/scripts/ocr_pre.py <- ENTFERNT (Jetzt via Watchdog)
+      PAPERLESS_POST_CONSUME_SCRIPT: /usr/src/paperless/scripts/ai_post_consume.py
+      PAPERLESS_URL: http://paperless-webserver:8000
+      PAPERLESS_CSRF_TRUSTED_ORIGINS: "http://paperless-webserver:8000,http://localhost:8000"
+      PAPERLESS_ALLOWED_HOSTS: "paperless-webserver,localhost,*"
+      PAPERLESS_CONSUMER_TIMEOUT: 6000
+      PAPERLESS_TASK_WORKERS: 3
+      OLLAMA_HOST: http://host.docker.internal:11434
+      CHROMADB_HOST: http://chromadb:8000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  ai-worker:
+    build: ./docker-build
+    container_name: paperless_ai_worker
+    restart: unless-stopped
+    depends_on:
+      - webserver
+      - chromadb
+    volumes:
+      - /volume1/docker/paperless-ngx/data:/usr/src/paperless/data
+      - /volume1/docker/paperless-ngx/media:/usr/src/paperless/media
+      - /volume1/docker/paperless-ngx/consume:/usr/src/paperless/consume
+      - /volume1/docker/paperless-ngx/scan_input:/usr/src/paperless/scan_input
+      - /volume1/docker/paperless-ngx/scripts:/usr/src/paperless/scripts
+      - /volume1/temp:/volume1/temp
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      PAPERLESS_REDIS: redis://broker:6379
+      PAPERLESS_DBHOST: db
+      PYTHONIOENCODING: "utf-8"
+      OLLAMA_HOST: http://host.docker.internal:11434
+      CHROMADB_HOST: http://chromadb:8000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    entrypoint: /usr/local/bin/python3
+    command: /usr/src/paperless/scripts/ai_watchdog.py
+  gotenberg:
+    image: docker.io/gotenberg/gotenberg:latest
+    restart: unless-stopped
+
+    # The gotenberg chromium route is used to convert .eml files. We do not
+    # want to allow external content like tracking pixels or even javascript.
+    command:
+      - "gotenberg"
+      - "--chromium-disable-javascript=true"
+      - "--chromium-allow-list=file:///tmp/.*"
+
+  tika:
+    image: docker.io/apache/tika:latest-full
+    restart: unless-stopped
+
+  ollama-cpu:
+    image: ollama/ollama:latest
+    container_name: paperless_ollama_cpu
+    restart: unless-stopped
+    ports:
+      - "11435:11434"
+    volumes:
+      - ollama-cpu_data:/root/.ollama
+
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: paperless_chromadb
+    restart: unless-stopped
+    volumes:
+      - /volume1/docker/paperless-ngx/chromadb_data:/chroma/chroma
+    environment:
+      - ANONYMIZED_TELEMETRY=FALSE
+    ports:
+      - "8100:8000"
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: paperless_open_webui
+    restart: unless-stopped
+    ports:
+      - "8501:8080"
+    environment:
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - WEBUI_AUTH=false
+      - WEBUI_SECRET_KEY=BD40nXHAp6xowhBL
+    volumes:
+      - open-webui_data:/app/backend/data
+      - /volume1/docker/paperless-ngx/media/archive:/app/backend/data/docs:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - chromadb
+
+  ai_dashboard:
+    build: ./dashboard
+    container_name: paperless_ai_dashboard
+    restart: unless-stopped
+    ports:
+      - "8050:8050"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/paperless_root
+      - ./scripts:/usr/src/paperless/scripts
+
+volumes:
+  redisdata:
+  open-webui_data:
+  ollama-cpu_data:

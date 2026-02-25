@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paperless-ngx AI Control Panel</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: #1e293b;
+            --text-color: #f8fafc;
+            --accent: #3b82f6;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --console-bg: #000000;
+            --console-text: #4ade80;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #334155;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-bar {
+            display: flex;
+            gap: 15px;
+        }
+
+        .status-badge {
+            background-color: var(--panel-bg);
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid #334155;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #64748b;
+        }
+
+        .dot.running {
+            background-color: var(--success);
+            box-shadow: 0 0 8px var(--success);
+        }
+
+        .dot.exited {
+            background-color: var(--danger);
+            box-shadow: 0 0 8px var(--danger);
+        }
+
+        .main-container {
+            display: flex;
+            gap: 20px;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .sidebar {
+            width: 300px;
+            background-color: var(--panel-bg);
+            border-radius: 8px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+            border: 1px solid #334155;
+        }
+
+        .action-group {
+            margin-bottom: 10px;
+        }
+
+        .action-group h3 {
+            font-size: 0.9rem;
+            color: #94a3b8;
+            margin-top: 0;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        button {
+            background-color: #334155;
+            color: white;
+            border: 1px solid #475569;
+            padding: 10px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            text-align: left;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        button:hover {
+            background-color: #475569;
+            border-color: var(--accent);
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        button.primary {
+            background-color: var(--accent);
+            border-color: var(--accent);
+        }
+
+        button.primary:hover {
+            background-color: #2563eb;
+        }
+
+        button.danger {
+            border-color: var(--danger);
+            color: #fca5a5;
+        }
+
+        button.danger:hover {
+            background-color: #7f1d1d;
+            border-color: var(--danger);
+        }
+
+        .console-container {
+            flex: 1;
+            background-color: var(--console-bg);
+            border-radius: 8px;
+            border: 1px solid #334155;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .console-header {
+            background-color: var(--panel-bg);
+            padding: 10px 15px;
+            font-size: 0.85rem;
+            color: #94a3b8;
+            border-bottom: 1px solid #334155;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        #log-output {
+            flex: 1;
+            padding: 15px;
+            margin: 0;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.85rem;
+            color: var(--console-text);
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-color);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: var(--panel-bg);
+            border-left: 4px solid var(--accent);
+            padding: 15px 20px;
+            border-radius: 4px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            transform: translateX(120%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1000;
+        }
+
+        .toast.show {
+            transform: translateX(0);
+        }
+
+        .toast.error {
+            border-left-color: var(--danger);
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.6);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        .modal {
+            background: var(--panel-bg);
+            padding: 25px;
+            border-radius: 8px;
+            width: 500px;
+            max-width: 90vw;
+            border: 1px solid #334155;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 15px;
+            margin-bottom: 15px;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.2rem;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: #94a3b8;
+            cursor: pointer;
+            padding: 0;
+            width: auto;
+        }
+
+        .close-btn:hover {
+            color: white;
+        }
+
+        .duplicate-list {
+            max-height: 400px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .duplicate-item {
+            background: #0f172a;
+            padding: 12px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid #334155;
+        }
+
+        .duplicate-item a {
+            background: var(--accent);
+            color: white;
+            text-decoration: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .duplicate-item a:hover {
+            background: #2563eb;
+        }
+
+        .no-duplicates {
+            color: #94a3b8;
+            font-style: italic;
+            text-align: center;
+            padding: 20px 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <h1>🤖 Paperless AI Control</h1>
+        <div class="status-bar" id="status-bar">
+            <!-- Will be populated by JS -->
+            <div class="status-badge">Lädt...</div>
+        </div>
+    </header>
+
+    <div class="main-container">
+
+        <div class="sidebar">
+            <div class="action-group">
+                <h3>Skripte (Worker)</h3>
+                <button onclick="runScript('process_by_tag.py')">
+                    Tag 'KI-NOCHMAL' abarbeiten <span>▶</span>
+                </button>
+                <button onclick="runScript('ai_backfill.py')">
+                    KI-Backfill (Fehlende) <span>▶</span>
+                </button>
+            </div>
+
+            <div class="action-group">
+                <h3>Datenbank (ChromaDB)</h3>
+                <button onclick="runScript('maintenance_cleanup_vectors.py')">
+                    Vektoren bereinigen (Sync) <span>🧹</span>
+                </button>
+                <button onclick="runScript('chroma_cleanup.py')">
+                    DB Komplett leeren (Reset) <span>⚠️</span>
+                </button>
+            </div>
+
+            <div class="action-group">
+                <h3>Paperless Tools</h3>
+                <button onclick="openCompareModal()">
+                    Duplikate vergleichen <span>⚖️</span>
+                </button>
+            </div>
+
+            <div class="action-group">
+                <h3>System & Backup</h3>
+                <button onclick="runBackup()">
+                    Vollständiges Backup (Tar) <span>📦</span>
+                </button>
+                <button class="danger" onclick="openRestoreModal()"
+                    style="color: #fca5a5; border-color: var(--danger);">
+                    Wiederherstellen (Restore) <span>♻️</span>
+                </button>
+            </div>
+
+            <div class="action-group">
+                <h3>Container-Steuerung</h3>
+                <button class="danger" onclick="restartContainer('paperless_ai_worker')">
+                    AI Watchdog Neustart <span>🔄</span>
+                </button>
+                <button class="danger" onclick="restartContainer('paperless-webserver')">
+                    Webserver Neustart <span>🔄</span>
+                </button>
+            </div>
+
+            <div class="action-group">
+                <button style="text-align:center; color:#94a3b8; border:none; background:transparent;"
+                    onclick="window.open(location.origin.replace('8050', '8000'), '_blank')">
+                    ↗ Zu Paperless-ngx
+                </button>
+                <button style="text-align:center; color:#94a3b8; border:none; background:transparent;"
+                    onclick="window.open(location.origin.replace('8050', '8501'), '_blank')">
+                    ↗ Zu Open WebUI
+                </button>
+            </div>
+        </div>
+
+        <div class="console-container">
+            <div class="console-header">
+                <span>Live Logs: paperless_ai_worker</span>
+                <span id="auto-scroll-toggle" style="cursor:pointer; color: var(--accent);"
+                    onclick="toggleAutoScroll()">Auto-Scroll: ON</span>
+            </div>
+            <pre id="log-output">Verbinde zum Log-Stream...</pre>
+        </div>
+    </div>
+
+    <div id="toast" class="toast">Aktion ausgeführt.</div>
+
+    <!-- Duplicates Modal -->
+    <div id="duplicates-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Erkannte Duplikate</h2>
+                <button class="close-btn" onclick="closeCompareModal()">×</button>
+            </div>
+            <div id="duplicate-list" class="duplicate-list">
+                <div class="no-duplicates">Lade Duplikate aus Paperless...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Restore Modal -->
+    <div id="restore-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 style="color: var(--danger);">System Wiederherstellen</h2>
+                <button class="close-btn" onclick="closeRestoreModal()">×</button>
+            </div>
+            <div style="margin-bottom: 20px; font-size: 0.9rem; color: #94a3b8;">
+                Gefahr: Dieser Vorgang überschreibt Ihre momentanen Datenbanken und Skripte unwiderruflich!
+            </div>
+            <form id="restore-form" onsubmit="submitRestore(event)">
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px;">Aus bestehenden Backups wählen:</label>
+                    <select id="restore-select" name="filename"
+                        style="width: 100%; padding: 8px; background: #0f172a; color: white; border: 1px solid #334155; border-radius: 4px;">
+                        <option value="">-- Lade Backups... --</option>
+                    </select>
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px;">ODER: Manueller Pfad (.tar.gz):</label>
+                    <input type="text" id="restore-custom" name="custom_path"
+                        placeholder="/volume1/temp/meinbackup.tar.gz"
+                        style="width: calc(100% - 18px); padding: 8px; background: #0f172a; color: white; border: 1px solid #334155; border-radius: 4px;">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 5px;">ODER: Datei vom PC hochladen:</label>
+                    <input type="file" id="restore-file" name="file" accept=".tar.gz" style="color: #94a3b8;">
+                </div>
+                <button type="submit" class="danger"
+                    style="text-align: center; justify-content: center; font-weight: bold; background: #7f1d1d;">
+                    Wiederherstellung Starten
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let autoScroll = true;
+        const logOutput = document.getElementById('log-output');
+
+        function toggleAutoScroll() {
+            autoScroll = !autoScroll;
+            document.getElementById('auto-scroll-toggle').innerText = `Auto-Scroll: ${autoScroll ? 'ON' : 'OFF'}`;
+            document.getElementById('auto-scroll-toggle').style.color = autoScroll ? 'var(--accent)' : '#94a3b8';
+        }
+
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.innerText = message;
+            if (isError) {
+                toast.classList.add('error');
+            } else {
+                toast.classList.remove('error');
+            }
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        async function fetchStatus() {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+
+                const bar = document.getElementById('status-bar');
+                bar.innerHTML = '';
+
+                // Mapping nicer names
+                const names = {
+                    "paperless_ai_worker": "AI Watchdog",
+                    "paperless-webserver": "Paperless",
+                    "paperless_chromadb": "ChromaDB",
+                    "paperless_open_webui": "WebUI"
+                };
+
+                for (const [container, info] of Object.entries(data)) {
+                    const badge = document.createElement('div');
+                    badge.className = 'status-badge';
+
+                    const dot = document.createElement('div');
+                    dot.className = `dot ${info.state === 'running' ? 'running' : 'exited'}`;
+
+                    const text = document.createElement('span');
+                    text.innerText = names[container] || container;
+
+                    badge.appendChild(dot);
+                    badge.appendChild(text);
+                    bar.appendChild(badge);
+                }
+            } catch (err) {
+                console.error("Status fetch error", err);
+            }
+        }
+
+        async function runScript(name) {
+            try {
+                const res = await fetch('/api/run_script', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ script_name: name })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`Skript gestartet: ${name}`);
+                    fetchStatus(); // Refresh status immediately in case something changes
+                } else {
+                    showToast(`Fehler: ${data.error}`, true);
+                }
+            } catch (err) {
+                showToast("Netzwerkfehler.", true);
+            }
+        }
+
+        async function restartContainer(name) {
+            if (!confirm(`Möchten Sie den Container '${name}' wirklich neustarten?`)) return;
+            showToast(`Sende Neustart-Befehl für ${name}...`);
+            try {
+                const res = await fetch('/api/restart_container', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ container_name: name })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`Container neugestartet!`);
+                    setTimeout(fetchStatus, 2000);
+                } else {
+                    showToast(`Fehler: ${data.error}`, true);
+                }
+            } catch (err) {
+                showToast("Netzwerkfehler.", true);
+            }
+        }
+
+        async function runBackup() {
+            if (!confirm(`Möchten Sie jetzt ein vollständiges lokales Backup erstellen? Einige Web-Dienste werden dafür vorübergehend heruntergefahren.`)) return;
+            showToast(`Starte System-Backup im Hintergrund...`);
+            try {
+                const res = await fetch('/api/backup', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message);
+                } else {
+                    showToast(`Fehler: ${data.error}`, true);
+                }
+            } catch (err) {
+                showToast("Netzwerkfehler.", true);
+            }
+        }
+
+        // Setup Event Source for live logs (using fetch stream)
+        async function streamLogs() {
+            try {
+                const response = await fetch('/api/logs/ai_worker');
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value, { stream: true });
+
+                    // Limit lines to prevent memory overflow (keep last 500 lines)
+                    const lines = logOutput.innerText.split('\n');
+                    if (lines.length > 500) {
+                        logOutput.innerText = lines.slice(lines.length - 400).join('\n');
+                    }
+
+                    logOutput.innerText += chunk;
+
+                    if (autoScroll) {
+                        logOutput.scrollTop = logOutput.scrollHeight;
+                    }
+                }
+            } catch (error) {
+                console.error("Log stream error:", error);
+                logOutput.innerText += "\n[Verbindung zum Log-Stream verloren. Versuche Neustart in 5 Sekunden...]\n";
+                setTimeout(streamLogs, 5000);
+            }
+        }
+
+        async function openCompareModal() {
+            const modal = document.getElementById('duplicates-modal');
+            const list = document.getElementById('duplicate-list');
+            modal.style.display = 'flex';
+            list.innerHTML = '<div class="no-duplicates">Lade Duplikate aus Paperless...</div>';
+
+            try {
+                const res = await fetch('/api/duplicates');
+                const data = await res.json();
+
+                if (data.success) {
+                    if (data.duplicates.length === 0) {
+                        list.innerHTML = '<div class="no-duplicates">Keine ungelesenen Duplikate gefunden.</div>';
+                    } else {
+                        list.innerHTML = '';
+                        const paperlessUrl = location.origin.replace('8050', '8000');
+                        data.duplicates.forEach(dup => {
+                            // Fix relative links
+                            let finalLink = dup.link;
+                            if (finalLink.startsWith('/')) {
+                                finalLink = paperlessUrl + finalLink;
+                            }
+
+                            const item = document.createElement('div');
+                            item.className = 'duplicate-item';
+                            item.innerHTML = `
+                                <span>${dup.title}</span>
+                                <a href="${finalLink}" target="_blank">Vergleichen ↗</a>
+                            `;
+                            list.appendChild(item);
+                        });
+                    }
+                } else {
+                    list.innerHTML = `<div class="no-duplicates" style="color:var(--danger)">Fehler: ${data.error}</div>`;
+                }
+            } catch (err) {
+                list.innerHTML = `<div class="no-duplicates" style="color:var(--danger)">Netzwerkfehler beim Laden.</div>`;
+            }
+        }
+
+        function closeCompareModal() {
+            document.getElementById('duplicates-modal').style.display = 'none';
+        }
+
+        async function openRestoreModal() {
+            document.getElementById('restore-modal').style.display = 'flex';
+            const select = document.getElementById('restore-select');
+            select.innerHTML = '<option value="">Lade...</option>';
+
+            try {
+                const res = await fetch('/api/list_backups');
+                const data = await res.json();
+                if (data.success && data.backups.length > 0) {
+                    select.innerHTML = '<option value="">-- Bitte wählen --</option>';
+                    data.backups.forEach(b => {
+                        select.innerHTML += `<option value="${b.filename}">${b.filename} (${b.size_mb} MB)</option>`;
+                    });
+                } else {
+                    select.innerHTML = '<option value="">Keine Backups in ./backups gefunden</option>';
+                }
+            } catch (e) {
+                select.innerHTML = '<option value="">Fehler beim Laden</option>';
+            }
+        }
+
+        function closeRestoreModal() {
+            document.getElementById('restore-modal').style.display = 'none';
+        }
+
+        async function submitRestore(e) {
+            e.preventDefault();
+            if (!confirm("Wirklich WIEDERHERSTELLEN? Ihr aktuelles lokales System wird überschrieben!")) return;
+
+            const form = document.getElementById('restore-form');
+            const fileInput = document.getElementById('restore-file');
+            const select = document.getElementById('restore-select');
+            const custom = document.getElementById('restore-custom');
+
+            const formData = new FormData();
+
+            if (fileInput.files.length > 0) {
+                formData.append('file', fileInput.files[0]);
+            } else if (select.value) {
+                formData.append('filename', select.value);
+            } else if (custom.value) {
+                formData.append('custom_path', custom.value);
+            } else {
+                showToast("Bitte ein Backup auswählen.", true);
+                return;
+            }
+
+            closeRestoreModal();
+            showToast("Sende Sicherung...", false);
+
+            try {
+                const res = await fetch('/api/restore', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message);
+                    logOutput.innerText += `\n[RESTORE: ${data.message}]\n`;
+                } else {
+                    showToast(`Fehler: ${data.error}`, true);
+                }
+            } catch (err) {
+                showToast("Netzwerkfehler beim Restore.", true);
+            }
+        }
+
+        // Updates
+        setInterval(fetchStatus, 5000);
+        fetchStatus();
+        streamLogs();
+    </script>
+</body>
+
+</html>

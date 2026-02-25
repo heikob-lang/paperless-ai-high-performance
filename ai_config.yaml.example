@@ -1,0 +1,24 @@
+# Paperless-AI Configuration Example
+# Copy this to ai_config.yaml and adjust your settings
+
+paperless:
+  api_url: "http://paperless-webserver:8000/api"
+  public_url: "http://localhost:8000" # URL for the dashboard links
+  api_token: "YOUR_PAPERLESS_API_TOKEN"
+  media_root: "/usr/src/paperless/media"
+
+ollama:
+  gpu_host: "http://host.docker.internal:11434"
+  cpu_host: "http://ollama-cpu:11434"
+  cpu_container_name: "paperless_ollama_cpu"
+  vision_model: "qwen2.5-vl:7b"
+  text_model: "qwen2.5:3b"
+  embedding_model: "nomic-embed-text:latest"
+
+chromadb:
+  host: "http://chromadb:8000"
+  collection: "paperless_docs"
+
+prompts:
+  ocr_base: "Erkenne den Text in diesem Bild exakt. Achte auf Tabellen und Layout."
+  summary: "Fasse dieses Dokument in 3-5 Stichpunkten zusammen."
