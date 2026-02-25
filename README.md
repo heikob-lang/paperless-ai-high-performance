@@ -7,6 +7,7 @@ Es nutzt modernste Vision-Modelle (`qwen2.5vl`), um Dokumente nicht nur zu lesen
 
 - **Asynchrone Vision-Pipeline**: Trennung von CPU (Bildvorbereitung) und GPU (KI-Analyse) für maximale Performance.
 - **Retroactive OCR**: Verarbeite Dokumente, die bereits in Paperless sind, einfach durch Vergabe des Tags `AI-OCR` neu.
+- **PostgreSQL Upgrade Tool**: Automatisiertes Tool für sichere Major-Version-Upgrades der Datenbank (V3.5).
 - **Resource Saver**: Automatisches Stoppen/Starten des Ollama-CPU Containers bei Inaktivität (um Strom und RAM zu sparen).
 - **No-Swap Policy**: Intelligentes Routing zwischen GPU und CPU verhindert VRAM-Abstürze.
 - **Pre-Vision Duplicate Check**: Vermeidet teure KI-Läufe durch schnellen Text-Embedding-Vergleich (ChromaDB).
